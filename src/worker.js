@@ -31,8 +31,9 @@ const BOT_UA_PATTERNS = [
   "slackbot",
 ];
 
-// Cache the Gist in the Worker's memory for this many seconds.
-// Keeps Gist fetches fast without hammering GitHub on every bot hit.
+// Bucket size (seconds) for the Gist URL cache-buster. Bot hits within the
+// same window share an identical URL, so Cloudflare's subrequest cache +
+// GitHub's CDN dedupe Gist fetches.
 const GIST_CACHE_TTL_SECONDS = 300;
 
 // ─── Gist fetch ───────────────────────────────────────────────────────────────
@@ -68,13 +69,19 @@ export default {
       return handleBotRequest(url, env);
     }
 
-    // Pass-through: forward to Hashnode, preserving path + query + headers.
+    // Pass-through: forward to Hashnode, preserving path + query + headers + body.
     const passthroughUrl = `https://incodethismeans.com${url.pathname}${url.search}`;
     const newHeaders = new Headers(request.headers);
     newHeaders.set("host", "incodethismeans.com");
+    // Buffer the body so it can be forwarded regardless of stream state.
+    // GET/HEAD have no body; arrayBuffer() returns an empty buffer for them.
+    const hasBody = request.method !== "GET" && request.method !== "HEAD";
+    const body = hasBody ? await request.arrayBuffer() : null;
     return fetch(new Request(passthroughUrl, {
       method: request.method,
       headers: newHeaders,
+      body,
+      redirect: request.redirect,
     }));
   },
 };

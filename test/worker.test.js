@@ -425,14 +425,21 @@ describe("pass-through for non-bot requests", () => {
     expect(calledUrl).toBe("https://incodethismeans.com/some-post?ref=twitter");
   });
 
-  it("preserves the HTTP method in the pass-through request", async () => {
-    const mockFetch = vi.fn(() => Promise.resolve(new Response("upstream", { status: 200 })));
+  it("preserves the HTTP method and body in the pass-through request", async () => {
+    let capturedBody = null;
+    const mockFetch = vi.fn(async (input) => {
+      if (input instanceof Request) {
+        capturedBody = await input.text();
+      }
+      return new Response("upstream", { status: 200 });
+    });
     vi.stubGlobal("fetch", mockFetch);
 
+    const payload = JSON.stringify({ name: "test" });
     const req = new Request("https://incodethismeans.com/contact", {
       method: "POST",
       headers: { "user-agent": "Mozilla/5.0", "content-type": "application/json" },
-      body: JSON.stringify({ name: "test" }),
+      body: payload,
     });
     await SELF.fetch(req);
 
@@ -440,5 +447,6 @@ describe("pass-through for non-bot requests", () => {
     const method =
       calledArg instanceof Request ? calledArg.method : "GET";
     expect(method).toBe("POST");
+    expect(capturedBody).toBe(payload);
   });
 });
