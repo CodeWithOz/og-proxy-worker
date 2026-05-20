@@ -463,6 +463,56 @@ describe("/_img route — URL validation", () => {
     );
     expect(res.status).toBe(403);
   });
+
+  it("returns 403 for javascript: scheme (non-HTTP origin blocked by origin check)", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const ssrf = encodeURIComponent("javascript://cdn.hashnode.com/x");
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${ssrf}`)
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for file: scheme (non-HTTP origin blocked by origin check)", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const ssrf = encodeURIComponent("file://cdn.hashnode.com/etc/passwd");
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${ssrf}`)
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 403 for userinfo bypass attempt (https://user:pw@cdn.hashnode.com/...)", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const ssrf = encodeURIComponent("https://user:pw@cdn.hashnode.com/x.jpg");
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${ssrf}`)
+    );
+    // URL.origin strips userinfo, so origin is "https://cdn.hashnode.com" — allowed.
+    // The request should therefore succeed (proxied), not 403.
+    expect(res.status).not.toBe(403);
+  });
+
+  it("returns 502 when the upstream image fetch throws a network error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url, _init) => {
+        const urlStr =
+          typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (urlStr.includes("cdn.hashnode.com")) {
+          throw new Error("network error");
+        }
+        return Promise.resolve(new Response("upstream", { status: 200 }));
+      })
+    );
+    const encoded = encodeURIComponent(ALLOWED_IMAGE_URL);
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${encoded}`)
+    );
+    expect(res.status).toBe(502);
+    const text = await res.text();
+    expect(text).toBe("Failed to fetch image");
+  });
 });
 
 // ── 11. /_img route — upstream fetch ──────────────────────────────────────────

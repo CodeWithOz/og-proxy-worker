@@ -18,7 +18,7 @@
 // Blog-level defaults used when a slug isn't in the Gist (e.g. homepage).
 const BLOG_TITLE = "In Code This Means { ... }";
 const BLOG_DESCRIPTION = "A blog about software development by Uche Ozoemena.";
-const ALLOWED_IMAGE_ORIGINS = ["cdn.hashnode.com"];
+const ALLOWED_IMAGE_ORIGINS = ["https://cdn.hashnode.com"];
 // Bot UA substrings to intercept (lowercase).
 const BOT_UA_PATTERNS = [
   "telegrambot",
@@ -123,7 +123,7 @@ function extractSlug(pathname) {
   return stripped;
 }
 
-// ─── HTML shell builders ──────────────────────────────────────────────────────
+// ─── Image proxy ──────────────────────────────────────────────────────────────
 
 async function proxyImage(requestUrl) {
   const imageUrlParam = requestUrl.searchParams.get("url");
@@ -139,11 +139,16 @@ async function proxyImage(requestUrl) {
     return new Response("Invalid url parameter", { status: 400 });
   }
 
-  if (!ALLOWED_IMAGE_ORIGINS.includes(imageUrl.hostname)) {
+  if (!ALLOWED_IMAGE_ORIGINS.includes(imageUrl.origin)) {
     return new Response("Image origin not allowed", { status: 403 });
   }
 
-  const upstream = await fetch(imageUrl.toString());
+  let upstream;
+  try {
+    upstream = await fetch(imageUrl.toString());
+  } catch {
+    return new Response("Failed to fetch image", { status: 502 });
+  }
 
   if (!upstream.ok) {
     return new Response("Failed to fetch image", { status: upstream.status });
@@ -164,6 +169,8 @@ function proxyImageUrl(requestUrl, rawImageUrl) {
   const base = `${requestUrl.protocol}//${requestUrl.host}`;
   return `${base}/_img?url=${encodeURIComponent(rawImageUrl)}`;
 }
+
+// ─── HTML shell builders ──────────────────────────────────────────────────────
 
 function buildPostShell(url, post) {
   return htmlShell({
