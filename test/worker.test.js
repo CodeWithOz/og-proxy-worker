@@ -298,6 +298,27 @@ describe("image tags", () => {
     expect(text).not.toContain('<meta property="og:image"');
     expect(text).not.toContain('<meta name="twitter:image"');
   });
+
+  it("uses twitter:card=summary_large_image when the post has an image", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const res = await SELF.fetch(botRequest("/understanding-closures"));
+    const text = await res.text();
+    expect(text).toContain('<meta name="twitter:card" content="summary_large_image">');
+  });
+
+  it("uses twitter:card=summary when the post has no image", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const res = await SELF.fetch(botRequest("/async-await-guide"));
+    const text = await res.text();
+    expect(text).toContain('<meta name="twitter:card" content="summary">');
+  });
+
+  it("uses twitter:card=summary for the blog shell (no image)", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const res = await SELF.fetch(botRequest("/"));
+    const text = await res.text();
+    expect(text).toContain('<meta name="twitter:card" content="summary">');
+  });
 });
 
 // ── 6. Gist fetch failure → minimalFallback ───────────────────────────────────
@@ -356,7 +377,29 @@ describe("HTML escaping", () => {
   });
 });
 
-// ── 8. GIST_URL is read from env, not a const ─────────────────────────────────
+// ── 8. Malformed Gist entry guard ─────────────────────────────────────────────
+
+describe("malformed Gist entry guard", () => {
+  it("falls back to blog-level defaults when title and description are missing from the post entry", async () => {
+    const postsWithMissingFields = {
+      "incomplete-post": {
+        // title and description intentionally omitted
+        image: "",
+      },
+    };
+    vi.stubGlobal("fetch", makeGistFetch(postsWithMissingFields));
+    const res = await SELF.fetch(botRequest("/incomplete-post"));
+    const text = await res.text();
+    // Must not contain the literal string "undefined"
+    expect(text).not.toContain(">undefined<");
+    expect(text).not.toContain('content="undefined"');
+    // Must contain blog-level defaults
+    expect(text).toContain("In Code This Means");
+    expect(text).toContain("A blog about software development by Uche Ozoemena");
+  });
+});
+
+// ── 9. GIST_URL is read from env, not a const ────────────────────────────────
 
 describe("env.GIST_URL", () => {
   it("fetches from the URL provided in env.GIST_URL, not a hardcoded constant", async () => {

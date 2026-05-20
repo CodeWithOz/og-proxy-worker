@@ -18,8 +18,6 @@
 // Blog-level defaults used when a slug isn't in the Gist (e.g. homepage).
 const BLOG_TITLE = "In Code This Means { ... }";
 const BLOG_DESCRIPTION = "A blog about software development by Uche Ozoemena.";
-const BLOG_URL = "https://incodethismeans.com";
-
 // Bot UA substrings to intercept (lowercase).
 const BOT_UA_PATTERNS = [
   "telegrambot",
@@ -125,8 +123,8 @@ function extractSlug(pathname) {
 function buildPostShell(canonicalUrl, post) {
   return htmlShell({
     canonicalUrl,
-    title: post.title,
-    description: post.description,
+    title: post.title || BLOG_TITLE,
+    description: post.description || BLOG_DESCRIPTION,
     image: post.image || "",
     ogType: "article",
   });
@@ -144,6 +142,7 @@ function buildBlogShell(canonicalUrl) {
 
 function htmlShell({ canonicalUrl, title, description, image, ogType }) {
   const e = escapeHtml;
+  const cardType = image ? "summary_large_image" : "summary";
   const imageTags = image
     ? `\n  <meta property="og:image" content="${e(image)}">
   <meta name="twitter:image" content="${e(image)}">`
@@ -163,7 +162,7 @@ function htmlShell({ canonicalUrl, title, description, image, ogType }) {
   <meta property="og:description" content="${e(description)}">
   <meta property="og:site_name" content="${e(BLOG_TITLE)}">${imageTags}
 
-  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:card" content="${e(cardType)}">
   <meta name="twitter:title" content="${e(title)}">
   <meta name="twitter:description" content="${e(description)}">
 </head>
