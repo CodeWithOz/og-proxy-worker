@@ -283,11 +283,13 @@ describe("image tags", () => {
     vi.stubGlobal("fetch", makeGistFetch());
     const res = await SELF.fetch(botRequest("/understanding-closures"));
     const text = await res.text();
+    const rawCdnUrl = "https://cdn.hashnode.com/res/hashnode/image/upload/closures.png";
+    const proxyUrl = `https://incodethismeans.com/_img?url=${encodeURIComponent(rawCdnUrl)}`;
     expect(text).toContain(
-      `<meta property="og:image" content="https://cdn.hashnode.com/res/hashnode/image/upload/closures.png">`
+      `<meta property="og:image" content="${proxyUrl}">`
     );
     expect(text).toContain(
-      `<meta name="twitter:image" content="https://cdn.hashnode.com/res/hashnode/image/upload/closures.png">`
+      `<meta name="twitter:image" content="${proxyUrl}">`
     );
   });
 
@@ -429,6 +431,272 @@ describe("env.GIST_URL", () => {
     expect(fetchedUrl).toMatch(
       new RegExp(`^${TEST_GIST_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`)
     );
+  });
+});
+
+// ── 10. /_img route — URL validation ──────────────────────────────────────────
+
+const ALLOWED_IMAGE_URL = "https://cdn.hashnode.com/res/hashnode/image/upload/sample.jpg";
+
+describe("/_img route — URL validation", () => {
+  it("returns 400 when url query param is missing", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const res = await SELF.fetch(
+      new Request("https://incodethismeans.com/_img")
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when url query param is not a valid URL", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const res = await SELF.fetch(
+      new Request("https://incodethismeans.com/_img?url=not-a-url")
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 403 when url hostname is not in ALLOWED_IMAGE_ORIGINS", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const disallowed = encodeURIComponent("https://evil.com/x.jpg");
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${disallowed}`)
+    );
+    expect(res.status).toBe(403);
+  });
+});
+
+// ── 11. /_img route — upstream fetch ──────────────────────────────────────────
+
+describe("/_img route — upstream fetch", () => {
+  it("returns status 200 and proxies the body when upstream is OK", async () => {
+    const imageBody = "binary-image-data";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url, _init) => {
+        const urlStr =
+          typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (urlStr.includes("cdn.hashnode.com")) {
+          return Promise.resolve(
+            new Response(imageBody, {
+              status: 200,
+              headers: { "content-type": "image/jpeg" },
+            })
+          );
+        }
+        return Promise.resolve(new Response("upstream", { status: 200 }));
+      })
+    );
+
+    const encoded = encodeURIComponent(ALLOWED_IMAGE_URL);
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${encoded}`)
+    );
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toBe(imageBody);
+  });
+
+  it("passes through a non-OK upstream status with body 'Failed to fetch image'", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url, _init) => {
+        const urlStr =
+          typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (urlStr.includes("cdn.hashnode.com")) {
+          return Promise.resolve(new Response("not found", { status: 404 }));
+        }
+        return Promise.resolve(new Response("upstream", { status: 200 }));
+      })
+    );
+
+    const encoded = encodeURIComponent(ALLOWED_IMAGE_URL);
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${encoded}`)
+    );
+    expect(res.status).toBe(404);
+    const text = await res.text();
+    expect(text).toBe("Failed to fetch image");
+  });
+
+  it("forwards the upstream content-type header when present", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url, _init) => {
+        const urlStr =
+          typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (urlStr.includes("cdn.hashnode.com")) {
+          return Promise.resolve(
+            new Response("data", {
+              status: 200,
+              headers: { "content-type": "image/png" },
+            })
+          );
+        }
+        return Promise.resolve(new Response("upstream", { status: 200 }));
+      })
+    );
+
+    const encoded = encodeURIComponent(ALLOWED_IMAGE_URL);
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${encoded}`)
+    );
+    expect(res.headers.get("content-type")).toBe("image/png");
+  });
+
+  it("always includes cache-control: public, max-age=86400", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url, _init) => {
+        const urlStr =
+          typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (urlStr.includes("cdn.hashnode.com")) {
+          return Promise.resolve(new Response("data", { status: 200 }));
+        }
+        return Promise.resolve(new Response("upstream", { status: 200 }));
+      })
+    );
+
+    const encoded = encodeURIComponent(ALLOWED_IMAGE_URL);
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${encoded}`)
+    );
+    expect(res.headers.get("cache-control")).toBe("public, max-age=86400");
+  });
+
+  it("forwards the upstream content-length header when present", async () => {
+    const body = "image-bytes";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url, _init) => {
+        const urlStr =
+          typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (urlStr.includes("cdn.hashnode.com")) {
+          return Promise.resolve(
+            new Response(body, {
+              status: 200,
+              headers: {
+                "content-type": "image/jpeg",
+                "content-length": String(body.length),
+              },
+            })
+          );
+        }
+        return Promise.resolve(new Response("upstream", { status: 200 }));
+      })
+    );
+
+    const encoded = encodeURIComponent(ALLOWED_IMAGE_URL);
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${encoded}`)
+    );
+    expect(res.headers.get("content-length")).toBe(String(body.length));
+  });
+
+  it("omits content-length when upstream does not provide it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url, _init) => {
+        const urlStr =
+          typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (urlStr.includes("cdn.hashnode.com")) {
+          // Response without content-length header
+          return Promise.resolve(
+            new Response("data", {
+              status: 200,
+              headers: { "content-type": "image/jpeg" },
+            })
+          );
+        }
+        return Promise.resolve(new Response("upstream", { status: 200 }));
+      })
+    );
+
+    const encoded = encodeURIComponent(ALLOWED_IMAGE_URL);
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${encoded}`)
+    );
+    expect(res.headers.get("content-length")).toBeNull();
+  });
+});
+
+// ── 12. /_img fires before bot/pass-through logic ─────────────────────────────
+
+describe("/_img fires before bot detection", () => {
+  it("a bot UA hitting /_img gets the image proxy response, not an OG HTML shell", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url, _init) => {
+        const urlStr =
+          typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (urlStr.includes("cdn.hashnode.com")) {
+          return Promise.resolve(
+            new Response("img-data", {
+              status: 200,
+              headers: { "content-type": "image/jpeg" },
+            })
+          );
+        }
+        // Gist — should not be reached for this path
+        return Promise.resolve(
+          new Response(JSON.stringify(POSTS_FIXTURE), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+        );
+      })
+    );
+
+    const encoded = encodeURIComponent(ALLOWED_IMAGE_URL);
+    const res = await SELF.fetch(
+      new Request(`https://incodethismeans.com/_img?url=${encoded}`, {
+        headers: { "user-agent": "TelegramBot (like TwitterBot)" },
+      })
+    );
+
+    // Must not be an HTML OG shell
+    expect(res.headers.get("content-type")).not.toContain("text/html");
+    const text = await res.text();
+    expect(text).not.toContain("og:");
+  });
+});
+
+// ── 13. og:image rewrite ──────────────────────────────────────────────────────
+
+describe("og:image rewrite via /_img proxy", () => {
+  it("og:image content is the /_img proxy URL, not the raw CDN URL", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const res = await SELF.fetch(botRequest("/understanding-closures"));
+    const text = await res.text();
+
+    const rawCdnUrl =
+      "https://cdn.hashnode.com/res/hashnode/image/upload/closures.png";
+    const expectedProxy = `https://incodethismeans.com/_img?url=${encodeURIComponent(rawCdnUrl)}`;
+
+    expect(text).toContain(`<meta property="og:image" content="${expectedProxy}">`);
+    // Must NOT contain the raw CDN URL directly
+    expect(text).not.toContain(`content="${rawCdnUrl}"`);
+  });
+
+  it("the encoded CDN URL inside og:image decodes back to the original CDN URL", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const res = await SELF.fetch(botRequest("/understanding-closures"));
+    const text = await res.text();
+
+    const match = text.match(
+      /<meta property="og:image" content="https:\/\/incodethismeans\.com\/_img\?url=([^"]+)"/
+    );
+    expect(match).not.toBeNull();
+    const decoded = decodeURIComponent(match[1]);
+    expect(decoded).toBe(
+      "https://cdn.hashnode.com/res/hashnode/image/upload/closures.png"
+    );
+  });
+
+  it("og:image tag is absent when the post has no image (no proxy URL emitted)", async () => {
+    vi.stubGlobal("fetch", makeGistFetch());
+    const res = await SELF.fetch(botRequest("/async-await-guide"));
+    const text = await res.text();
+    expect(text).not.toContain('<meta property="og:image"');
   });
 });
 

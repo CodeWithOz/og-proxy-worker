@@ -18,6 +18,7 @@
 // Blog-level defaults used when a slug isn't in the Gist (e.g. homepage).
 const BLOG_TITLE = "In Code This Means { ... }";
 const BLOG_DESCRIPTION = "A blog about software development by Uche Ozoemena.";
+const ALLOWED_IMAGE_ORIGINS = ["cdn.hashnode.com"];
 // Bot UA substrings to intercept (lowercase).
 const BOT_UA_PATTERNS = [
   "telegrambot",
@@ -63,6 +64,10 @@ export default {
     const ua = (request.headers.get("user-agent") || "").toLowerCase();
     const url = new URL(request.url);
 
+    if (url.pathname === "/_img") {
+      return proxyImage(url);
+    }
+
     if (isBot(ua)) {
       return handleBotRequest(url, env);
     }
@@ -98,7 +103,7 @@ async function handleBotRequest(url, env) {
     const post = slug ? posts[slug] : null;
 
     if (post) {
-      return new Response(buildPostShell(url.href, post), ogHeaders());
+      return new Response(buildPostShell(url, post), ogHeaders());
     }
 
     // Homepage or unknown path — use blog-level defaults.
@@ -120,12 +125,52 @@ function extractSlug(pathname) {
 
 // ─── HTML shell builders ──────────────────────────────────────────────────────
 
-function buildPostShell(canonicalUrl, post) {
+async function proxyImage(requestUrl) {
+  const imageUrlParam = requestUrl.searchParams.get("url");
+
+  if (!imageUrlParam) {
+    return new Response("Missing url parameter", { status: 400 });
+  }
+
+  let imageUrl;
+  try {
+    imageUrl = new URL(imageUrlParam);
+  } catch {
+    return new Response("Invalid url parameter", { status: 400 });
+  }
+
+  if (!ALLOWED_IMAGE_ORIGINS.includes(imageUrl.hostname)) {
+    return new Response("Image origin not allowed", { status: 403 });
+  }
+
+  const upstream = await fetch(imageUrl.toString());
+
+  if (!upstream.ok) {
+    return new Response("Failed to fetch image", { status: upstream.status });
+  }
+
+  const headers = new Headers();
+  const contentType = upstream.headers.get("content-type");
+  const contentLength = upstream.headers.get("content-length");
+  if (contentType) headers.set("content-type", contentType);
+  if (contentLength) headers.set("content-length", contentLength);
+  headers.set("cache-control", "public, max-age=86400");
+
+  return new Response(upstream.body, { status: 200, headers });
+}
+
+function proxyImageUrl(requestUrl, rawImageUrl) {
+  if (!rawImageUrl) return "";
+  const base = `${requestUrl.protocol}//${requestUrl.host}`;
+  return `${base}/_img?url=${encodeURIComponent(rawImageUrl)}`;
+}
+
+function buildPostShell(url, post) {
   return htmlShell({
-    canonicalUrl,
+    canonicalUrl: url.href,
     title: post.title || BLOG_TITLE,
     description: post.description || BLOG_DESCRIPTION,
-    image: post.image || "",
+    image: proxyImageUrl(url, post.image),
     ogType: "article",
   });
 }
