@@ -3,10 +3,7 @@ main = "src/worker.js"
 compatibility_date = "2026-05-13"
 
 [vars]
-# Placeholder — override this value in the Cloudflare dashboard at deploy time.
-# Go to Workers & Pages > og-proxy-worker > Settings > Variables and Secrets,
-# then set GIST_URL to your real Gist raw URL before deploying.
-GIST_URL = "https://gist.githubusercontent.com/REPLACE_WITH_YOUR_USERNAME/REPLACE_WITH_YOUR_GIST_ID/raw/posts.json"
+GIST_URL = "https://gist.githubusercontent.com/CodeWithOz/69c77a7142c84a33e4f2979eb489b848/raw/b6696c3876445ea0760aa9e297eeda5a6a2f55ad/posts.json"
 
 [observability]
 enabled = false
