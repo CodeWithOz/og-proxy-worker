@@ -27,23 +27,6 @@ that serves the OG metadata JSON for all posts.
   in the Cloudflare dashboard (Settings → Variables and Secrets).
 - Cloudflare account IDs or API tokens.
 
-## Image proxy (`/_img`)
-
-The `/_img?url=<encoded>` route runs **before** bot detection — every UA hits it.
-`proxyImage()` validates the URL, checks the origin against `ALLOWED_IMAGE_ORIGINS`, fetches
-the upstream image, and streams it back with `cache-control: public, max-age=86400`.
-
-`ALLOWED_IMAGE_ORIGINS` holds full HTTPS origins (e.g. `"https://cdn.hashnode.com"`). The
-scheme is part of the check and is load-bearing: including it prevents `javascript:` and
-`file:` SSRF bypasses. Only add HTTPS origins to this list.
-
-`proxyImageUrl(requestUrl, rawImageUrl)` rewrites a raw CDN URL into a `/_img` proxy URL.
-It is called inside `buildPostShell` so that `og:image` tags in bot shells point through the
-worker rather than directly to the CDN.
-
-**Add a new allowed image origin**
-Append `"https://<hostname>"` to `ALLOWED_IMAGE_ORIGINS` at the top of `src/worker.js`.
-
 ## Common workflows
 
 **Add a bot UA**

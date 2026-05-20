@@ -22,11 +22,6 @@ Request arrives
 Bot UA patterns matched (case-insensitive substring): `telegrambot`, `discordbot`, `whatsapp`,
 `twitterbot`, `facebookexternalhit`, `linkedinbot`, `slackbot`.
 
-`og:image` URLs in bot shells are rewritten to pass through the worker's `/_img` route
-(`/_img?url=<encoded-cdn-url>`) so that bots can fetch cover images even if the CDN blocks
-requests with bot User-Agent strings. `ALLOWED_IMAGE_ORIGINS` in `src/worker.js` controls
-which image origins the proxy will forward.
-
 ## Setup
 
 ```
