@@ -7,3 +7,18 @@ compatibility_date = "2026-05-13"
 # Go to Workers & Pages > og-proxy-worker > Settings > Variables and Secrets,
 # then set GIST_URL to your real Gist raw URL before deploying.
 GIST_URL = "https://gist.githubusercontent.com/REPLACE_WITH_YOUR_USERNAME/REPLACE_WITH_YOUR_GIST_ID/raw/posts.json"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
