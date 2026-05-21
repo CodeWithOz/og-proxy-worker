@@ -98,9 +98,12 @@ async function handleBotRequest(url, env) {
   try {
     const posts = await getPostsData(env);
     const post = slug ? posts[slug] : null;
+    console.log("slug:", slug, "found:", !!post);
 
     if (post) {
-      return new Response(buildPostShell(url.href, post), ogHeaders());
+      const html = buildPostShell(url.href, post);
+      console.log("html_snippet:", html.slice(0, 200));
+      return new Response(html, ogHeaders());
     }
 
     // Homepage or unknown path — use blog-level defaults.
