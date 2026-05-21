@@ -3,7 +3,7 @@ main = "src/worker.js"
 compatibility_date = "2026-05-13"
 
 [vars]
-GIST_URL = "https://gist.githubusercontent.com/CodeWithOz/69c77a7142c84a33e4f2979eb489b848/raw/b6696c3876445ea0760aa9e297eeda5a6a2f55ad/posts.json"
+GIST_URL = "https://gist.githubusercontent.com/CodeWithOz/69c77a7142c84a33e4f2979eb489b848/raw/posts.json"
 
 [observability]
 enabled = false
