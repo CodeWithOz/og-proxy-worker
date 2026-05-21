@@ -43,7 +43,9 @@ async function getPostsData(env) {
   // requests within that window share the same CDN-cached response.
   const now = Date.now();
   const url = `${env.GIST_URL}?t=${Math.floor(now / (GIST_CACHE_TTL_SECONDS * 1000))}`;
+  console.log("gist_url:", url);
   const res = await fetch(url);
+  console.log("gist_status:", res.status);
   if (!res.ok) return {};
   return res.json();
 }
