@@ -32,7 +32,7 @@ const BOT_UA_PATTERNS = [
 // Bucket size (seconds) for the Gist URL cache-buster. Bot hits within the
 // same window share an identical URL, so Cloudflare's subrequest cache +
 // GitHub's CDN dedupe Gist fetches.
-const GIST_CACHE_TTL_SECONDS = 300;
+const GIST_CACHE_TTL_SECONDS = 1;
 
 // ─── Gist fetch ───────────────────────────────────────────────────────────────
 
